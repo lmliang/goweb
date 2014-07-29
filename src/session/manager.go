@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"net/url"
 	"sync"
+	"time"
 )
 
 type Manager struct {
@@ -42,13 +43,34 @@ func (manager *Manager) SessionStart(w http.ResponseWriter, r *http.Request) (se
 	cookie, err := r.Cookie(manager.cookieName)
 	if err != nil && cookie.Value == "" {
 		sid := manager.SessionID()
-		session = manager.provider.SessionInit(sid)
+		session, _ = manager.provider.SessionInit(sid)
 		cookie := http.Cookie{Name: manager.cookieName, Value: url.QueryEscape(sid),
 			Path: "/", HttpOnly: true, MaxAge: int(manager.maxLifeTime)}
 		http.SetCookie(w, &cookie)
 	} else {
-		sid, err := url.QueryUnescape(cookie.Value)
-		session := manager.provider.SessionRead(sid)
+		sid, _ := url.QueryUnescape(cookie.Value)
+		session, _ = manager.provider.SessionRead(sid)
 	}
 	return
+}
+
+func (manager *Manager) SessionDestory(w http.ResponseWriter, r *http.Request) {
+	cookie, err := r.Cookie(manager.cookieName)
+	if err != nil || cookie.Value == "" {
+		return
+	} else {
+		manager.lock.Lock()
+		defer manager.lock.Unlock()
+		manager.provider.SessionDestory(cookie.Value)
+		expiration := time.Now()
+		cookie := http.Cookie{Name: manager.cookieName, Path: "/", HttpOnly: true, Expires: expiration, MaxAge: -1}
+		http.SetCookie(w, &cookie)
+	}
+}
+
+func (manager *Manager) GC() {
+	manager.lock.Lock()
+	defer manager.lock.Unlock()
+	manager.provider.SessionGC(manager.maxLifeTime)
+	time.AfterFunc(time.Duration(manager.maxLifeTime), func() { manager.GC() })
 }
