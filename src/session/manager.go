@@ -20,7 +20,7 @@ type Manager struct {
 
 func NewManager(providerName, cookieName string, maxLifeTime int) (*Manager, error) {
 	provider, err := providers[providerName]
-	if err {
+	if !err {
 		return nil, fmt.Errorf("session: Unknow privoder name %s", providerName)
 	}
 
@@ -41,7 +41,7 @@ func (manager *Manager) SessionStart(w http.ResponseWriter, r *http.Request) (se
 	defer manager.lock.Unlock()
 
 	cookie, err := r.Cookie(manager.cookieName)
-	if err != nil && cookie.Value == "" {
+	if err != nil || cookie.Value == "" {
 		sid := manager.SessionID()
 		session, _ = manager.provider.SessionInit(sid)
 		cookie := http.Cookie{Name: manager.cookieName, Value: url.QueryEscape(sid),
